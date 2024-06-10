@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
-import { sendEmailVerification } from 'firebase/auth';
-import { createUser } from '../firebase/firebaseFunctions';
-import { ref, set, db } from '../firebase/Firebase.jsx';
+import { sendEmailVerification, createUserWithEmailAndPassword } from 'firebase/auth';
+import { ref, set } from 'firebase/database';
+import { auth, db } from '../firebase/Firebase.jsx'; 
 import { Link, useNavigate } from 'react-router-dom';
 import { Country, State, City } from "country-state-city";
 import Select from "react-select";
@@ -11,7 +11,7 @@ import './Signup.css';
 const Signup = () => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [birthdate, setBirthdate] = useState('');
+  const [birthdate, setBirthdate] = useState(null);
   const [email, setEmail] = useState('');
   const [confirmEmail, setConfirmEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -90,16 +90,14 @@ const Signup = () => {
     }
 
     try {
-      const authUser = await createUser(email, password, {
-        displayName: `${firstName} ${lastName}`,
-      });
+      const authUser = await createUserWithEmailAndPassword(auth, email, password);
 
       const formattedBirthdate = birthdate.toISOString().slice(0, 10);
-      const userRef = ref(db, `/players/${authUser.uid}`);
+      const userRef = ref(db, `/players/${authUser.user.uid}`);
       await set(userRef, {
         name: `${firstName} ${lastName}`,
-        email: authUser.email,
-        id: authUser.uid,
+        email: authUser.user.email,
+        id: authUser.user.uid,
         dateOfBirth: formattedBirthdate,
         gender: gender,
         location: {
@@ -112,7 +110,7 @@ const Signup = () => {
           singles: 2,
         }
       });
-      await sendEmailVerification(authUser);
+      await sendEmailVerification(authUser.user);
       navigate('/login', { state: { message: 'A verification email has been sent. Please verify your account.' } });
     } catch (error) {
       setError(error.message);
@@ -229,8 +227,6 @@ const Signup = () => {
               value={selectedCountry}
               onChange={handleCountryChange}
               placeholder="Country"
-
-
               required
             />
           </div>
@@ -268,10 +264,11 @@ const Signup = () => {
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onBlur={validateEmail}
               data-cypress-name={"email-signup"}
-
               required
             />
+            {emailError && <p className="error">{emailError}</p>}
           </div>
           <div className="col">
             <input
@@ -279,14 +276,11 @@ const Signup = () => {
               placeholder="Confirm Email"
               value={confirmEmail}
               onChange={(e) => setConfirmEmail(e.target.value)}
-              required
-              onPaste={(e) => e.preventDefault()}
+              onBlur={validateEmail}
               data-cypress-name={"confirm-email-signup"}
-
+              required
             />
-            {emailError && (
-              <p className="error">{emailError}</p>
-            )}
+            {emailError && <p className="error">{emailError}</p>}
           </div>
         </div>
         <div className="row">
@@ -298,13 +292,10 @@ const Signup = () => {
               onChange={(e) => setPassword(e.target.value)}
               onBlur={handlePasswordBlur}
               data-cypress-name={"password-signup"}
-
               required
             />
-            {passwordTouched && !isPasswordValid(password) && (
-              <p className="error">
-                Password must contain at least one uppercase letter, one lowercase letter, one number, one special character, and be at least six characters long.
-              </p>
+            {passwordTouched && passwordError && (
+              <p className="error">{passwordError}</p>
             )}
           </div>
           <div className="col">
@@ -313,25 +304,22 @@ const Signup = () => {
               placeholder="Confirm Password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              onPaste={(e) => e.preventDefault()}
+              onBlur={handlePasswordBlur}
               data-cypress-name={"confirm-password-signup"}
-
+              required
             />
-            {passwordError && (
+            {passwordTouched && passwordError && (
               <p className="error">{passwordError}</p>
             )}
           </div>
         </div>
-        <button
-          data-cypress-name={"submit-button-signup"}
-          type="submit">Sign Up</button>
-        <p >
-          Already have an account? <Link data-cypress-name={"sign-in-link-signup"} to="/">Sign in</Link>
-        </p>
+        <button type="submit" data-cypress-name={"signup-button"}>Sign up</button>
       </form>
+      <p>
+        Already have an account? <Link to="/login">Log in</Link>
+      </p>
     </div>
   );
 };
 
-export default Signup
+export default Signup;

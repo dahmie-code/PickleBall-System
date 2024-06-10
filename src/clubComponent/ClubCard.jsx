@@ -9,7 +9,7 @@ const ClubCard = ({ club }) => {
       <Link to={`/club/${club.id}`} className="club-link">
       <div className="club-card">
         <h3>{club.name}</h3>
-          <small>{club.city}</small>
+          <small>{club.location.city}</small>
           <p className="member-count">{memberCount} {memberLabel}</p>
         </div>  
       </Link>
