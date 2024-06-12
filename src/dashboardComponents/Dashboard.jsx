@@ -9,11 +9,13 @@ import {
     getMatchHistoryForUser,
     getMatchDetails,
     getUser,
+    calculateUserAge
 } from '../firebase/firebaseFunctions';
 import { updatePlayerRatings } from './updatePlayerRatings'; 
 import { calculateSummaryStatistics } from './MatchStatistics';
 import Sidebar from '../sidebarComponent/Sidebar';
-import GraphImg from '../assets/Graph.png'; 
+import LineChart from './LineChart';
+// import GraphImg from '../assets/Graph.png'; 
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -30,6 +32,7 @@ const Dashboard = () => {
     const [showButton, setShowButton] = useState(true);
     const [verifiedMatchId, setVerifiedMatchId] = useState(null);
     const [statsType, setStatsType] = useState('singles');
+    const [graphData, setGraphData] = useState({ labels: [], datasets: [] });
     // const [expandedMatchId, setExpandedMatchId] = useState(null);
     // const [playerCards, setPlayerCards] = useState([]);
 
@@ -80,7 +83,6 @@ useEffect(() => {
     try {
         if (userId) {
         const matchHistory = await getMatchHistoryForUser(userId);
-        //   console.log('Match History:', matchHistory);
         if (matchHistory && Array.isArray(matchHistory)) {
             setMatches(matchHistory);
         } else {
@@ -94,82 +96,94 @@ useEffect(() => {
     fetchMatchHistory();
 }, [userId]);
 
-const calculateAge = (dateOfBirth) => {
-    const dob = new Date(dateOfBirth);
-    const now = new Date();
-    let age = now.getFullYear() - dob.getFullYear();
-  
-    // Check if the birthday has occurred this year or not
-    if (now.getMonth() < dob.getMonth() || (now.getMonth() === dob.getMonth() && now.getDate() < dob.getDate())) {
-      age--;
-    }
-  
-    return age;
-  };
-
 const fetchPlayerDetails = async (playerIds) => {
     try {
         const detailsPromises = playerIds.map(async (playerId) => {
             const playerDetails = await getUser(playerId);
-
-            // Calculate age based on dateOfBirth
-            if (playerDetails && playerDetails.dateOfBirth) {
-                playerDetails.age = calculateAge(playerDetails.dateOfBirth);
-            }
-
-            return { [playerId] : playerDetails };
+            return { [playerId]: playerDetails };
         });
 
         const playerDetailsArray = await Promise.all(detailsPromises);
-        const combinedPlayerDetails = Object.assign({},...playerDetailsArray.filter(Boolean));
+        const combinedPlayerDetails = Object.assign({}, ...playerDetailsArray.filter(Boolean));
 
         setPlayerDetails(combinedPlayerDetails);
-    } catch(error){
+    } catch (error) {
         console.error('Error fetching player details:', error);
     }
 };
 
 useEffect(() => {
     const fetchDetails = async () => {
-        try{
+        try {
             const detailsPromises = matches.map(async (matchId) => {
                 const match = await getMatchDetails(matchId);
                 return match ? { [matchId]: match } : null;
             });
             const matchDetailsArray = await Promise.all(detailsPromises);
             const filteredMatchDetails = Object.values(Object.assign({}, ...matchDetailsArray.filter(Boolean)));
-            //   console.log('Match Details:', filteredMatchDetails);
             
             setMatchDetails(Object.assign({}, ...matchDetailsArray.filter(Boolean)));
-        
+
             const playerIds = filteredMatchDetails
                 .flatMap((match) => [
-                ...(match.team_a || []).map((player) => player.playerId || null),
-                ...(match.team_b || []).map((player) => player.playerId || null),
+                    ...(match.team_a || []).map((player) => player.playerId || null),
+                    ...(match.team_b || []).map((player) => player.playerId || null),
                 ])
                 .filter(Boolean);
-        
-            //   console.log(playerIds);
-        
-            await  fetchPlayerDetails(playerIds);
-        
-        } catch(error){
+
+            await fetchPlayerDetails(playerIds);
+
+        } catch (error) {
             console.error('Error fetching match details:', error);
         }
     }
-
     fetchDetails();
 }, [matches]);
 
 useEffect(() => {
-    // Filter and calculate summary stats
     const verifiedMatches = Object.values(matchDetails).filter(
-    (match) => match.verified === true
+        (match) => match.verified === true
     );
     const stats = calculateSummaryStatistics(verifiedMatches);
     setSummaryStats(stats);
-    
 }, [matchDetails]);
+
+useEffect(() => {
+    const labels = matches.map((matchId) => {
+        const match = matchDetails[matchId];
+        return match ? new Date(match.date).toLocaleDateString() : '';
+    });
+
+    const singlesData = matches.map((matchId) => {
+        const match = matchDetails[matchId];
+        return match ? match.singlesRating : 0;
+    });
+
+    const doublesData = matches.map((matchId) => {
+        const match = matchDetails[matchId];
+        return match ? match.doublesRating : 0;
+    });
+
+    setGraphData({
+        labels,
+        datasets: [
+            {
+                label: 'Singles Rating',
+                data: singlesData,
+                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                fill: true,
+            },
+            {
+                label: 'Doubles Rating',
+                data: doublesData,
+                borderColor: 'rgba(153, 102, 255, 1)',
+                backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                fill: true,
+            },
+        ],
+    });
+}, [matches, matchDetails]);
 
 const filteredMatches = matches.filter((matchId) => {
     const match = matchDetails[matchId];
@@ -207,7 +221,7 @@ const handleVerification = async (matchId, playerId) => {
             setVerifiedMatchId(null);
             // Reload the page after 5 seconds
             window.location.reload();
-        }, 2000);
+        }, 5000);
     } catch (error) {
         console.error('Error verifying match:', error);
     }
@@ -227,7 +241,7 @@ const generatePlayerCards = (matchId) => {
         if (!playerInfo) return null;
     
         const { name, dateOfBirth, gender, location } = playerInfo;
-        const age = calculateAge(dateOfBirth);
+        const age = calculateUserAge(dateOfBirth);
         const formattedGender = gender.charAt(0).toUpperCase() + gender.slice(1);
         const { playerRating, ratingChange } = player;
 

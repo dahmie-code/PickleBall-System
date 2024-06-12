@@ -60,7 +60,7 @@ const Signup = () => {
   };
 
   const validatePhoneNumber = () => {
-    const phoneRegex = /^[0-9()+\-]{0,20}$/; // Regex to allow only numeric values and characters (),+,- with a maximum length of 20 characters
+    const phoneRegex = /^[0-9()+\- ]{0,20}$/; // Regex to allow only numeric values and characters (),+,- with a maximum length of 20 characters
     if (!phoneRegex.test(phone)) {
       setPhoneError('Phone number should only contain numeric values, max 20 characters and non-numeric characters (),+,-');
       return false;
